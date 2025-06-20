@@ -1,4 +1,4 @@
-FROM apeworx/ape:0.8.4
+FROM ghcr.io/apeworx/ape:v0.8.36
 
 USER 1000
 WORKDIR /home/harambe/project
