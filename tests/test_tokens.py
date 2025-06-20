@@ -2,7 +2,7 @@ import pytest
 
 import ape
 from ape import accounts as accts, chain
-from hypothesis import given, assume, settings, Phase, strategies as st
+from hypothesis import given, assume, settings, Phase, HealthCheck, strategies as st
 from hypothesis.strategies import sampled_from
 
 from tests.utils import find_event
@@ -79,7 +79,9 @@ class GenericTokenTest:
         tok = self.deploy_tok(accounts[0])
 
     def simple_transfer_testbody(self, accounts, txnum: int, extranum: int, a1, a2):
-        assume(a1 != a2)
+        if a1 == a2:
+            return
+
         totalmint = txnum + extranum
 
         # if a1 == a2:
@@ -89,7 +91,7 @@ class GenericTokenTest:
         checkSuccessfulTransfer(accounts, tok, a1, a2, a1, txnum, transfer_direct)
 
     # Test simple transfer between two accounts.
-    @settings(**default_settings)
+    @settings(suppress_health_check=[HealthCheck.differing_executors],**default_settings)
     @given(
         txnum=st.integers(min_value=0, max_value=100),
         extranum=st.integers(min_value=1, max_value=100),
@@ -97,6 +99,7 @@ class GenericTokenTest:
         a2=sampled_from(accts.test_accounts[0:5]),
     )
     def test_simple_transfer(self, accounts, txnum, extranum, a1, a2):
+        assume(a1 != a2)
         self.simple_transfer_testbody(accounts, txnum, extranum, a1, a2)
 
     # Test successful zero transfer between two accounts.
