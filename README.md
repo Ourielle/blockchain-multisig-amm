@@ -11,17 +11,14 @@ This is the main part of the project, in which you will be implementing an ERC20
 A skeleton implementation is in `contracts/ru_token.sol`.  
 
 ## Multisig Extension
-In this part of the project, you will add a "multisig" extension to the ERC20 token. The idea of this extension is to define a new type of "2-out-of-3" multisig address, which are defined by 
-*three* public keys. In order to transfer tokens from a multisig address, *two* of the three public-key owners must sign the transfer transaction. 
+In this part of the project, you will add a "multisig" extension to the ERC20 token. The idea of this extension is to define a new type of "2-out-of-3" multisig address, which are defined by *three* public keys. In order to transfer tokens from a multisig address, *two* of the three public-key owners must sign the transfer transaction. 
 
 The Multisig API captures this by adding three functions to the token API. The first two are used to define a multisig address based on the three public keys. 
 The multisig address should be defined completely by the three public keys. Given three standard public-key-based addresses `pk1`,`pk2`,`pk3`, the function `getMultisigAddress` 
-should return the corresponding multisig address.  Since the multisig address doesn't contain enough information to recover the actual public keys, it must be registered before using it by 
-calling `registerMultisigAddress`. 
+should return the corresponding multisig address.  Since the multisig address doesn't contain enough information to recover the actual public keys, it must be registered before using it by calling `registerMultisigAddress`. 
 
 The most important function is the `transfer2of3` function, which is used to transfer tokens from a multisig address 
-(tokens can to transferred *to* a multisig addresss using the standard token functions). This function accepts, in addition to the multisig source address, the destination and the amount to transfer, 
-two "special" arguments:
+(tokens can to transferred *to* a multisig addresss using the standard token functions). This function accepts, in addition to the multisig source address, the destination and the amount to transfer, two "special" arguments:
 
   * `uint nonce` --- this is a nonce value used to prevent "replay" attacks (see below).
   * `Signature calldata secondSig` --- This is a second signature on the transfer transaction (in addition to the transaction sender's signature that's verified implicitly by ethereum). 
@@ -30,16 +27,12 @@ The `Signature` type is defined in `IMultisigToken.sol`, as a struct containing 
 information about ECDSA signatures; the `v` element is used to recover the public key from the signature and message).
 
 ### Client code
-The implementation of the multisig extension also includes implementing client-side code in python that is used to generate the 2-out-of-3 transactions (this can't be done on the blockchain, because it must
-involve the secret signing keys).  You must implement the `generate_nonce_and_second_signature_transfer2of3`  function in `scripts/multisig_token.py`. This function accepts a  reference to 
-a "live" contract instance `tok`, the secret signing key `sk`, encoded as a hex string with a `0x` prefix (you can convert this into a `PrivateKey` object that can be used by the `keys.ecdsa_sign` function 
-by calling `keys.PrivateKey(bytes.fromhex(sk[2:]))`).
+The implementation of the multisig extension also includes implementing client-side code in python that is used to generate the 2-out-of-3 transactions (this can't be done on the blockchain, because it must involve the secret signing keys).  You must implement the `generate_nonce_and_second_signature_transfer2of3`  function in `scripts/multisig_token.py`. This function accepts a  reference to a "live" contract instance `tok`, the secret signing key `sk`, encoded as a hex string with a `0x` prefix (you can convert this into a `PrivateKey` object that can be used by the `keys.ecdsa_sign` function by calling `keys.PrivateKey(bytes.fromhex(sk[2:]))`).
 
 This function should return a tuple containing the *nonce* and the *signature* to be used when constructing the `transfer2of3` transaction. 
 
 ### Replay attacks
-Your multisig token should be resistant to *replay* attacks, in which an honestly-generated transaction is used by an attacker to transfer money that would not be authorized. You should consider
-the following types of attacks:
+Your multisig token should be resistant to *replay* attacks, in which an honestly-generated transaction is used by an attacker to transfer money that would not be authorized. You should consider the following types of attacks:
 
  * Simple replay: sending the same transaction data (i.e., source, destination, amount, and secondSig).
  * Repurposing signature replay: sending modified data, but reusing a previous secondSig.
@@ -48,9 +41,7 @@ In all of these cases, the transaction should fail.
 
 ### Hints
  * One way to define a multisig address based on public keys (securely) is to *hash* the three keys together, for example using the `keccak256` function.
- * Signature verification in solidity is done using the [`ecrecover` function](https://docs.soliditylang.org/en/v0.8.17/solidity-by-example.html#recovering-the-message-signer-in-solidity), that accepts the 
-   message hash and the `v`, `r,` and `s` signature parameters and returns the public key corresponding to the signature (every signature and message define *some* public key --- a signature is valid 
-   if the recovered public key is the one that's authorized to generate the signature). Note that although the `v` parameter is 0 or 1, solidity's `ecrecover` expects 27 or 28 instead.
+ * Signature verification in solidity is done using the [`ecrecover` function](https://docs.soliditylang.org/en/v0.8.17/solidity-by-example.html#recovering-the-message-signer-in-solidity), that accepts the message hash and the `v`, `r,` and `s` signature parameters and returns the public key corresponding to the signature (every signature and message define *some* public key --- a signature is valid if the recovered public key is the one that's authorized to generate the signature). Note that although the `v` parameter is 0 or 1, solidity's `ecrecover` expects 27 or 28 instead.
 
 ### Note
 If you choose to implement this part of the project, set `grade_multisig = True` in `scripts/multisig_token.py`. 
@@ -77,9 +68,7 @@ The exchange supports the following operations:
 In addition to the "exchange-specific" operations, the exchange should support all the standard ERC20 operations when acting as the liquidity token. Thus, it must also implement the `IERC20` interface.
 
 ### Fees
-When buying an selling tokens, the exchange can charge a fee (if the `feePercent` parameter given to `initialize` is non-zero). In this case, the fee is always taken from both the tokens and 
-the ETH involved. When buying, the fee is taken from the ETH paid *before it is traded*, and from the tokens *after the trade occurs*. When selling, the fee is taken from the tokens before the
-trade occurs, and from the ETH after the trade. The AMM maintains the constant token/eth product for a trade *before the fees are deposited*. 
+When buying an selling tokens, the exchange can charge a fee (if the `feePercent` parameter given to `initialize` is non-zero). In this case, the fee is always taken from both the tokens and the ETH involved. When buying, the fee is taken from the ETH paid *before it is traded*, and from the tokens *after the trade occurs*. When selling, the fee is taken from the tokens before the trade occurs, and from the ETH after the trade. The AMM maintains the constant token/eth product for a trade *before the fees are deposited*. 
 
 For example, if a transaction is selling 2 tokens, and the exchange liquidity consists of 10 tokens and 99 ETH before the transaction is processed, with a fee of 50 percent, the exchange first takes 1 token as fee, then "sells" one token for 9 ETH (this, the product before the transaction is 10x99=990, and after is 11x90 = 990, maintaining the constant). Finally, it takes 5 ETH as a fee (50% of 9, rounded up), and deposits the 5 ETH and 1 token in the liquidity pool. So the exchange ends up with 12 tokens and 95 ETH, and the seller receives 4 ETH. 
 
@@ -90,12 +79,14 @@ If you choose to implement this part of the project, set `grade_exchange = True`
 
 ## Submission Guidelines
 * Submission is in pairs.
-* Create a git repository for your project on the [course version-control server](https://vcs.ap.runi.ac.il/) by cloning the [project base](https://vcs.ap.runi.ac.il/blockchain/project-base)
-  - The name of your repository *must be* ``project-user1-user2``, where ``user1`` and ``user2`` are the usernames of the project participants.
+* Create a git repository for your project on the [course version-control server](https://vcs.ap.runi.ac.il/) by cloning the [project base](https://vcs.ap.runi.ac.il/blockchain/project-base) to a local directory, creating a new repository in the [blockchain organization](https://vcs.ap.runi.ac.il/blockchain)), and push from the local clone to the new repository (due to a bug in gitea, you can't use "fork" to do this)
+  - The name of your repository *must be* `project-user1-user2`, where `user1` and `user2` are the usernames of the project participants. (If you have permission to submit by yourself, the name should be `project-user1`)
 
     Note that the project will "belong" to one of the users (you can add the other user as a collaborator)
   - Make sure your repository is private
 * Repositories should contain all of the project source code.
+* After creating the cloned repository, **every** collaborator should submit the repository name in the Inginious [project-signup task](https://ing.ap.runi.ac.il/course/blockchain/project-signup).
+
 * I will run your project by cloning your repository, and running
 
       docker compose run test
@@ -130,7 +121,7 @@ by the `setup.sh` script. In order to use it:
 Instead of installing ape locally, you can use the docker compose environment to run tests (this is what we will do for grading, so it's recommended to
 check at home as well). To do this:
 
-* Run `docker compose build` in the project root directory
+* Run `docker compose build ape-console` in the project root directory
 * Run `docker compose up -d` to start the foundry container (this container runs a test ethereum node that listens on port 8545).
 * Run `docker compose run ape-console` to get a bash prompt. You can run `ape compile` at the prompt compile your solidity code, `ape test` to run tests, or `ape console` to open a python console.
 
