@@ -1,9 +1,11 @@
-FROM ghcr.io/apeworx/ape:v0.8.36
+FROM ghcr.io/apeworx/ape:v0.8.50
 
-USER 1000
-WORKDIR /home/harambe/project
+USER root
 
 COPY requirements.txt .
 
-RUN pip install -r requirements.txt && rm -f requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && rm -f requirements.txt
 
+USER 1000
+WORKDIR /home/harambe/project

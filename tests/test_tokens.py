@@ -2,7 +2,7 @@ import pytest
 
 import ape
 from ape import accounts as accts, chain
-from hypothesis import given, assume, settings, Phase, HealthCheck, strategies as st
+from hypothesis import given, assume, settings, Phase, strategies as st, currently_in_test_context
 from hypothesis.strategies import sampled_from
 
 from tests.utils import find_event
@@ -51,7 +51,47 @@ def checkFailedTransfer(tok, src, dst, sender, amount, transferFunc):
         tx = transferFunc(tok, src, dst, sender, amount)
 
 
+def base_given(*st_args, **st_kwargs):
+    """
+    Captures arbitrary positional and keyword strategies for deferred
+    Hypothesis compilation during subclass initialization.
+    """
+    def decorator(func):
+        func._hypothesis_args = st_args
+        func._hypothesis_kwargs = st_kwargs
+        return func
+    return decorator
+
 class GenericTokenTest:
+
+    # Hypothesis @given should not be an attribute of base class test functions, since they will be
+    # run by different executors. This function sets the @given attribute directly on the subclasses
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        for name in dir(cls):
+            # Evaluate all test methods in the subclass namespace
+            if name.startswith("test_"):
+                member = getattr(cls, name)
+
+                # Check for the presence of deferred strategy metadata
+                if hasattr(member, "_hypothesis_args") or hasattr(member, "_hypothesis_kwargs"):
+                    st_args = getattr(member, "_hypothesis_args", ())
+                    st_kwargs = getattr(member, "_hypothesis_kwargs", {})
+
+                    # Unpack the original function, avoiding nested given() closures
+                    underlying_func = getattr(member, "_raw_func", getattr(member, "__func__", member))
+
+                    # Compile an isolated wrapper instance for this specific subclass
+                    compiled_test = given(*st_args, **st_kwargs)(underlying_func)
+
+                    # Pass the metadata down to ensure deep inheritance works
+                    compiled_test._hypothesis_args = st_args
+                    compiled_test._hypothesis_kwargs = st_kwargs
+                    compiled_test._raw_func = underlying_func
+
+                    setattr(cls, name, compiled_test)
+
 
     # Must override this function!
     # Returns a token instance
@@ -79,8 +119,8 @@ class GenericTokenTest:
         tok = self.deploy_tok(accounts[0])
 
     def simple_transfer_testbody(self, accounts, txnum: int, extranum: int, a1, a2):
-        if a1 == a2:
-            return
+        if currently_in_test_context():
+            assume(a1 != a2)
 
         totalmint = txnum + extranum
 
@@ -91,15 +131,14 @@ class GenericTokenTest:
         checkSuccessfulTransfer(accounts, tok, a1, a2, a1, txnum, transfer_direct)
 
     # Test simple transfer between two accounts.
-    @settings(suppress_health_check=[HealthCheck.differing_executors],**default_settings)
-    @given(
+    @settings(**default_settings)
+    @base_given(
         txnum=st.integers(min_value=0, max_value=100),
         extranum=st.integers(min_value=1, max_value=100),
         a1=sampled_from(accts.test_accounts[0:5]),
         a2=sampled_from(accts.test_accounts[0:5]),
     )
     def test_simple_transfer(self, accounts, txnum, extranum, a1, a2):
-        assume(a1 != a2)
         self.simple_transfer_testbody(accounts, txnum, extranum, a1, a2)
 
     # Test successful zero transfer between two accounts.

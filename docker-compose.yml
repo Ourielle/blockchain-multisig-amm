@@ -12,7 +12,9 @@ services:
     tty: true
     entrypoint: ''
     depends_on:
-      - foundry
+      foundry:
+        # Ensures Anvil is actually accepting HTTP traffic before Ape boots
+        condition: service_healthy
     networks:
       apeworx: {}
 
@@ -38,6 +40,12 @@ services:
       - 8545:8545
     networks:
       apeworx: {}
+    healthcheck:
+      # Uses cast (included in the foundry image) to ping the RPC endpoint
+      test: ["CMD", "cast", "rpc", "eth_chainId", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
 
 networks:
   apeworx:
