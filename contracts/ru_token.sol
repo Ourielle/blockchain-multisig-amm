@@ -142,7 +142,16 @@ contract RUToken is IERC20, IERC20Metadata {
      * Emits a {Transfer} event.
      */
     function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
-        // TODO: Implement
+        require(recipient != address(0), "RUToken: transfer to zero address");
+        require(allowances[sender][msg.sender] >= amount, "RUToken: insufficient allowance");
+        require(balances[sender] >= amount, "RUToken: transfer exceeds balance");
+
+        // Spend the caller's allowance, then move the tokens.
+        allowances[sender][msg.sender] -= amount;
+        balances[sender] -= amount;
+        balances[recipient] += amount;
+        emit Transfer(sender, recipient, amount);
+        return true;
     }
 
     /**
