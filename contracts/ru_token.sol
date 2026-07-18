@@ -90,7 +90,13 @@ contract RUToken is IERC20, IERC20Metadata {
      * Emits a {Transfer} event.
      */
     function transfer(address recipient, uint256 amount) external override returns (bool) {
-        // TODO: Implement
+        require(recipient != address(0), "RUToken: transfer to zero address");
+        require(balances[msg.sender] >= amount, "RUToken: transfer exceeds balance");
+
+        balances[msg.sender] -= amount;
+        balances[recipient] += amount;
+        emit Transfer(msg.sender, recipient, amount);
+        return true;
     }
 
     /**
