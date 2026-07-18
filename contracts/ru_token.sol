@@ -119,7 +119,11 @@ contract RUToken is IERC20, IERC20Metadata {
      * Emits an {Approval} event.
      */
     function approve(address spender, uint256 amount) external override returns (bool) {
-        // TODO: Implement
+        require(spender != address(0), "RUToken: approve to zero address");
+
+        allowances[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
     }
 
     /**
