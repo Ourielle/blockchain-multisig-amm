@@ -136,18 +136,45 @@ contract RUToken is IERC20, IERC20Metadata {
     }
 
     /**
-     * @dev Mint a new token. 
-     * The total number of tokens minted is the msg value divided by tokenPrice.
+     * @dev Mint new tokens by paying ETH.
+     * The number of tokens minted is `msg.value / tokenPrice` (integer division).
+     * Any remainder that does not buy a whole token is refunded to the caller,
+     * so the contract keeps exactly `minted * tokenPrice` and never traps value.
+     * Reverts if minting would push the total supply above `maxTokens`.
      */
     function mint() public payable returns (uint) {
-        // TODO: Implement
+        uint minted = msg.value / tokenPrice;
+        require(_totalSupply + minted <= maxTokens, "RUToken: max supply exceeded");
+
+        // Effects: create the tokens before any external call (checks-effects-interactions).
+        _totalSupply += minted;
+        balances[msg.sender] += minted;
+        emit Transfer(address(0), msg.sender, minted);
+
+        // Interaction: refund the leftover wei that didn't buy a whole token.
+        uint refund = msg.value - minted * tokenPrice;
+        if (refund > 0) {
+            (bool ok, ) = msg.sender.call{value: refund}("");
+            require(ok, "RUToken: refund failed");
+        }
+
+        return minted;
     }
 
     /**
      * Burn `amount` tokens. The corresponding value (`tokenPrice` for each token) is sent to the caller.
      */
     function burn(uint amount) public {
-        // TODO: Implement
+        require(balances[msg.sender] >= amount, "RUToken: burn exceeds balance");
+
+        // Effects: destroy the tokens before sending ETH (checks-effects-interactions).
+        balances[msg.sender] -= amount;
+        _totalSupply -= amount;
+        emit Transfer(msg.sender, address(0), amount);
+
+        // Interaction: pay back the ETH that backed the burned tokens.
+        (bool ok, ) = msg.sender.call{value: amount * tokenPrice}("");
+        require(ok, "RUToken: ETH payout failed");
     }
 
 
