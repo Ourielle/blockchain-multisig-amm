@@ -37,6 +37,15 @@ contract RUToken is IERC20, IERC20Metadata {
      */
     uint public tokenPrice;
 
+    // Core ERC20 ledger: how many tokens each account holds.
+    mapping(address => uint256) private balances;
+
+    // Delegated spending limits: allowances[owner][spender] is how much `spender` may move on `owner`'s behalf via transferFrom.
+    mapping(address => mapping(address => uint256)) private allowances;
+
+    // Total number of tokens currently in existence.
+    uint256 private _totalSupply;
+
 
     constructor(uint _tokenPrice, uint _maxTokens) {
         tokenPrice = _tokenPrice;
@@ -63,14 +72,14 @@ contract RUToken is IERC20, IERC20Metadata {
      * @dev Returns the amount of tokens in existence.
      */
     function totalSupply() external view returns (uint256) {
-        // TODO: Implement
+        return _totalSupply;
     }
 
     /**
      * @dev Returns the amount of tokens owned by `account`.
      */
     function balanceOf(address account) public view override returns (uint256) {
-        // TODO: Implement
+        return balances[account];
     }
 
     /**
@@ -92,7 +101,7 @@ contract RUToken is IERC20, IERC20Metadata {
      * This value changes when {approve} or {transferFrom} are called.
      */
     function allowance(address owner, address spender) external view override returns (uint256) {
-        // TODO: Implement
+        return allowances[owner][spender];
     }
 
     /**
