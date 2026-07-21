@@ -8,25 +8,20 @@ import "./interfaces/IMultisigToken.sol";
 /**
  * @dev An implementation of the ERC20 standard for a "Reichman University" Token.
  */
-contract RUToken is IERC20, IERC20Metadata {
-
-    event Debug (
-        bytes32 hashVal,
-        address multisig,
-        address dest,
-        uint amount,
-        uint nonce,
-        Signature sig
-    );
+contract RUToken is IERC20, IERC20Metadata, IMultisigToken {
 
 
+    //a registered 2 out of 3 multisig account: the three controlling public
+    //keys and a per account nonce that makes each transfer2of3 single use
     struct Multisig {
         address pk1;
         address pk2;
         address pk3;
         uint nonce;
     }
-    
+    // registered multisig accounts, keyed by their derived address. 
+    // an unregistered adress has all 0 keys (pk ==address(0))
+    //mapping(address=> multisig) private multisigs
     /**
      * Maximum number of mintable tokens.
      */
@@ -194,6 +189,50 @@ contract RUToken is IERC20, IERC20Metadata {
         // Interaction: pay back the ETH that backed the burned tokens.
         (bool ok, ) = msg.sender.call{value: amount * tokenPrice}("");
         require(ok, "RUToken: ETH payout failed");
+    }
+
+    //2 out of 3 multisig extension
+    /**
+    *@dev returns adress controlled by public keys 'pk1', 'pk2', 'pk3'.
+    *the address is the low 20 bytes of the keccak256 hash of the 3 keys. 
+    *keccak256 is collision resistant so no other set of keys yield this address. 
+    */
+    function getMultisigAddress(address pk1, address pk2, address pk3) public pure override returns (address){
+        return address(uint160(uint256(keccak256(abi.encodePacked(pk1, pk2, pk3)))));
+    }
+    /**
+    *@dev registers a multisig account controlled by 'pk1', 'pk2', 'pk3' and returns its address. 
+    *registration is required because the address alone (a hash) doesn't reveal the keys the contract later needs to verify signatures. 
+    *each account can be registered only once. 
+    */
+    function registerMultisigAddress(address pk1, address pk2, address pk3) external override returns (address){
+        //validate the keys: non zero and pairwise distinct so a genuine 2 of 3
+        //always requires 2 different people
+        require(pk1 != address(0) && pk2 != address(0) && pk3 != address(0), "RUToken:zero multisig key");
+        require(pk1 != pk2 && pk1 != pk3 && pk2 != pk3, "RUToken: duplicate multisig key");
+        
+        address multisigAddr = getMultisigAddress(pk1, pk2, pk3); 
+        require(multisigs[multisigAddr].pk1 == address(0), "RUToken: multisig already registered");
+
+        multisigs[multisigAddr] = Multisig(pk1, pk2, pk3, 0);
+        return multisigAddr;
+    }
+    /**
+    *@dev returns the current transfer2of3 nonce for a registered multisig account. 
+    *used by the off chain client to build the msg the second singer approves. 
+    */
+    function getNonce(address multisigOwner) external view returns (uint) {
+        return multisigs[multisigOwner].nonce;
+    }
+
+    /**
+    *@dev moves 'amount' tokens from the multisig account 'multisigOwner' to 'recipient'
+    * authorized by 2 of its three controlling keys.
+    */
+    function transfer2of3(address multisigOwner, address recipient, uint256 amount, uint nonce, Signature calldata secondSig) external override returns (bool) {
+        //TODO (Step M2): verify the 2 signatures, nonce and balance, then move the tokens.
+        revert("RUToken: transfer2of3 not implemented");
+
     }
 
 
