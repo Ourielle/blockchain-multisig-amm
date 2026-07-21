@@ -228,11 +228,47 @@ contract RUToken is IERC20, IERC20Metadata, IMultisigToken {
     /**
     *@dev moves 'amount' tokens from the multisig account 'multisigOwner' to 'recipient'
     * authorized by 2 of its three controlling keys.
+    *the first singer is 'msg.sender' (authenticated by ethereum itself). 
+    * the second singer approves off chain nu singing the msg below 'secondSig' is that signature
+    *The signed msg binds this contract, the source, the destination, the amount and the none so a signature cannot be replayed accross contracts, transfers, or transaction fields
+    *the per account nonce makes each approval single use. 
     */
     function transfer2of3(address multisigOwner, address recipient, uint256 amount, uint nonce, Signature calldata secondSig) external override returns (bool) {
-        //TODO (Step M2): verify the 2 signatures, nonce and balance, then move the tokens.
-        revert("RUToken: transfer2of3 not implemented");
+        require(recipient != address(0), "RUToken:transfer to zero address");
+        Multisig storage ms = multisig[multisigOwner];
+        require(ms.pk1 != address(0), "RUToken: multisig not registered");
 
+        //first singer: the transaction sender must be one of the three controllers.
+        require(isController(ms, msg.sender), "RUToken:sender not a controller");
+
+        //the nonce must match account's curr nonce (blocks replayed transfers). 
+        require(nonce == ms.nonce, "RUToken: bad nonce");
+
+        //reconver the second singer from their signature over the bound message. 
+        //address(this) + multisigOwner + recipient + amount + nonce are all bound in -
+        // so the signature is useless on another contract/transfer/set of fields
+        bytes32 messageHash = keccak256(abi.encodePacked(address(this), multisigOwner, recipient, amount, nonce));
+        address secondSigner = ecrecover(messageHash, secondSig.v, secondSig.r, secondSig.s);
+
+        //second signer : a controller, and a different one than the sender that is the 2 of 3
+        require(isController(ms, secondSigner), "RUToken: second signer not a controller"); 
+        require(secondSigner != msg.sender, "RUToken: need two distinct signers"); 
+        require(balances[multisigOwner] >= amount, "RUToken: transfer exceeds balance");
+
+        //effects: consume the none and move the tokens before returning
+        ms.nonce += 1;
+        balances[multisigOwner] -= amount;
+        balances[recipient] += amount;
+        emit Transfer(multisigOwner, recipient, amount);
+        return true;
+
+    }
+
+    /**
+    *@dev returns true if account is one of the three jeys controlling multisig ms
+    */
+    function isController(Multisig storage ms, address account) private view returns (bool) {
+        return account == ms.pk1 || account == ms.pk2 || account ==ms.pk3;
     }
 
 
