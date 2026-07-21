@@ -1,9 +1,17 @@
 from typing import Tuple
 from eth_keys import KeyAPI
 from eth_keys.backends import NativeECCBackend
+from eth_uttils import keccak
 from ape import project
 
 RUToken = project.RUToken
+
+#return the raw 20 bytes of an address, accepting either an account/contracr
+#object (which exposes '.address') or a plain hex-string address
+def _address_bytes(a) -> bytes:
+    s = a.address if hasattr(a, "address") else str(a)
+    return bytes.fromhex(s[2:] if s.startswith("0x") else s)
+
 
 grade_multisig = False # Change this to true if you implemented the multisig token.
 
@@ -26,6 +34,21 @@ class Signature:
 def generate_nonce_and_second_signature_transfer2of3(tok: RUToken, sk, multisigAddr, spender, amount) -> Tuple[int,Signature]:
     key = keys.PrivateKey(bytes.fromhex(sk[2:])) # Can be used with `keys.ecdsa_sign``
 
-    # TODO: Implement
-    return (0, Signature(b'\0', b'\0', 0)) # Change this!
+    #rebuild byte for byte, the msg the contract hashes in transfer2of3:
+    #keccak256(abi.encodePacked(address(this), multisigOwner, recipient, amount, nonce))
+    # EncodePacked lays out each address as 20 bytes and each uinit256 as 32 big endian bytes.
+    message = ( #address(this) - 20 bytes
+        _address_bytes(tok) + 
+        _address_bytes(multisigAddr) #multisigOwner - 20 bytes
+        + _address_bytes(spender) #recipient - 20 bytes
+        + int(amount).to_bytes(32, "big") #amount - 32 bytes
+        + int(nonce).to_bytes(32, "big") #nonce - 32 bytes
+        )
+    messageHash = keccak(message)
+
+    #sign the raw hash (ecdsa_sign signs the 32 byte digest directly, matching ecrecover)
+    sig = keys.ecdsa_sign(messageHash, key)
+    return (none, Signature(sig.r.to_bytes(32, "big"), sig.s.to_bytes(32, "big"), sig.v))
+    
+
 
