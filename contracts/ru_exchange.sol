@@ -9,12 +9,33 @@ contract RUExchange is IExchange {
         return false;
     }
 
+    // The account that deployed the exchange; only it may call initialize.
+    address private deployer;
+
+    // Set once initialize succeeds, so the exchange can be initialized only once.
+    bool private initialized;
+
+    // The underlying ERC20 token traded against ETH.
+    IERC20 private token;
+
+    // Trading fee as a whole-number percentage of each trade (0..99).
+    uint8 private feePercent;
+
+    // Liquidity-token (LQT) ledger. The exchange is itself an ERC20 whose balances
+    // represent each provider's share of the pool.
+    mapping(address => uint256) private balances;
+    mapping(address => mapping(address => uint256)) private allowances;
+    uint256 private _totalSupply;
+
     constructor() {
-        // TODO: implement
+        deployer = msg.sender;
     }
 
+    /**
+     * Returns the underlying token contract traded by the exchange.
+     */
     function getToken() override external view returns(IERC20) {
-        // TODO: implement
+        return token;
     }
 
 
@@ -47,9 +68,10 @@ contract RUExchange is IExchange {
 
     /**
      * Returns the current number of tokens in the liquidity pool.
+     * Read live from the token contract, so it always includes accumulated fees.
      */
     function tokenBalance() external view returns(uint) {
-        // TODO: implement
+        return token.balanceOf(address(this));
     }
 
     
@@ -77,14 +99,14 @@ contract RUExchange is IExchange {
      * @dev Returns the amount of tokens in existence.
      */
     function totalSupply() external view returns (uint256) {
-        // TODO: Implement
+        return _totalSupply;
     }
 
     /**
      * @dev Returns the amount of tokens owned by `account`.
      */
     function balanceOf(address account) public view override returns (uint256) {
-        // TODO: Implement
+        return balances[account];
     }
 
 
@@ -96,7 +118,13 @@ contract RUExchange is IExchange {
      * Emits a {Transfer} event.
      */
     function transfer(address recipient, uint256 amount) external override returns (bool) {
-        // TODO: Implement
+        require(recipient != address(0), "RUExchange: transfer to zero address");
+        require(balances[msg.sender] >= amount, "RUExchange: transfer exceeds balance");
+
+        balances[msg.sender] -= amount;
+        balances[recipient] += amount;
+        emit Transfer(msg.sender, recipient, amount);
+        return true;
     }
 
     /**
@@ -107,7 +135,7 @@ contract RUExchange is IExchange {
      * This value changes when {approve} or {transferFrom} are called.
      */
     function allowance(address owner, address spender) external view override returns (uint256) {
-        // TODO: Implement
+        return allowances[owner][spender];
     }
 
     /**
@@ -125,7 +153,11 @@ contract RUExchange is IExchange {
      * Emits an {Approval} event.
      */
     function approve(address spender, uint256 amount) external override returns (bool) {
-        // TODO: Implement
+        require(spender != address(0), "RUExchange: approve to zero address");
+
+        allowances[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
     }
 
     /**
@@ -138,7 +170,16 @@ contract RUExchange is IExchange {
      * Emits a {Transfer} event.
      */
     function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
-        // TODO: Implement
+        require(recipient != address(0), "RUExchange: transfer to zero address");
+        require(allowances[sender][msg.sender] >= amount, "RUExchange: insufficient allowance");
+        require(balances[sender] >= amount, "RUExchange: transfer exceeds balance");
+
+        // Spend the caller's allowance, then move the tokens.
+        allowances[sender][msg.sender] -= amount;
+        balances[sender] -= amount;
+        balances[recipient] += amount;
+        emit Transfer(sender, recipient, amount);
+        return true;
     }
-   
+
 }
