@@ -19,9 +19,9 @@ contract RUToken is IERC20, IERC20Metadata, IMultisigToken {
         address pk3;
         uint nonce;
     }
-    // registered multisig accounts, keyed by their derived address. 
+    // registered multisig accounts, keyed by their derived address.
     // an unregistered adress has all 0 keys (pk ==address(0))
-    //mapping(address=> multisig) private multisigs
+    mapping(address => Multisig) private multisigs;
     /**
      * Maximum number of mintable tokens.
      */
@@ -235,7 +235,7 @@ contract RUToken is IERC20, IERC20Metadata, IMultisigToken {
     */
     function transfer2of3(address multisigOwner, address recipient, uint256 amount, uint nonce, Signature calldata secondSig) external override returns (bool) {
         require(recipient != address(0), "RUToken:transfer to zero address");
-        Multisig storage ms = multisig[multisigOwner];
+        Multisig storage ms = multisigs[multisigOwner];
         require(ms.pk1 != address(0), "RUToken: multisig not registered");
 
         //first singer: the transaction sender must be one of the three controllers.
