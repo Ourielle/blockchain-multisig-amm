@@ -79,7 +79,37 @@ contract RUExchange is IExchange {
      * @return Returns the actual total cost in ETH including fee.
      */
     function buyTokens(uint amount, uint maxPrice) override public payable returns (uint,uint,uint) {
-        // TODO: implement
+        uint poolTOK = token.balanceOf(address(this));
+        uint poolETH = address(this).balance - msg.value;   // exclude the ETH just sent
+
+        // ETH that must enter the pool to release `amount` tokens, keeping the product
+        // constant: (poolTOK - amount) * (poolETH + tradedEth) >= poolTOK * poolETH.
+        // Round up so the invariant never drops in the pool's favor.
+        uint tradedEth = ceilDiv(poolETH * amount, poolTOK - amount);
+
+        // The ETH fee is taken from the payment *before* the trade: gross up the traded
+        // amount so that, after removing the fee, `tradedEth` remains for the pool.
+        uint actualPayment = ceilDiv(tradedEth * 100, 100 - feePercent);
+        uint ethFee = actualPayment - tradedEth;
+
+        // The token fee is taken from `amount` *after* the trade; the buyer keeps the rest.
+        uint tokenFee = ceilDiv(amount * feePercent, 100);
+
+        require(actualPayment <= maxPrice, "RUExchange: price exceeds maxPrice");
+        require(msg.value >= actualPayment, "RUExchange: insufficient ETH sent");
+
+        // Interactions: send the bought tokens (net of fee) and refund the excess ETH.
+        // The pool keeps `actualPayment` ETH and the token fee; the constant-product
+        // reserves are what remain once both fees are set aside.
+        require(token.transfer(msg.sender, amount - tokenFee), "RUExchange: token transfer failed");
+        uint refund = msg.value - actualPayment;
+        if (refund > 0) {
+            (bool ok, ) = msg.sender.call{value: refund}("");
+            require(ok, "RUExchange: refund failed");
+        }
+
+        emit FeeDetails(actualPayment, ethFee, tokenFee);
+        return (actualPayment, ethFee, tokenFee);
     }
 
     /**
