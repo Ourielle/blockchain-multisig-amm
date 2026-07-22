@@ -110,7 +110,33 @@ contract RUExchange is IExchange {
      * @return returns a tuple consisting of (token_spent, eth_spent). 
      */
     function mintLiquidityTokens(uint amount, uint maxTOK, uint maxETH) public payable returns (uint,uint) {
-        // TODO: implement
+        require(msg.value >= maxETH, "RUExchange: insufficient ETH sent");
+
+        // Deposit tokens and ETH in the current pool ratio. Round up so the pool never
+        // loses value: numTOK = ceil(pool_tokens * amount / totalLQT), likewise for ETH.
+        uint poolTOK = token.balanceOf(address(this));
+        uint poolETH = address(this).balance - msg.value;   // exclude the ETH just sent
+        uint numTOK = ceilDiv(poolTOK * amount, _totalSupply);
+        uint numETH = ceilDiv(poolETH * amount, _totalSupply);
+
+        require(numTOK <= maxTOK, "RUExchange: needs more tokens than maxTOK");
+        require(numETH <= maxETH, "RUExchange: needs more ETH than maxETH");
+
+        // Effects: mint the new liquidity tokens to the caller.
+        _totalSupply += amount;
+        balances[msg.sender] += amount;
+        emit Transfer(address(0), msg.sender, amount);
+
+        // Interactions: pull the deposited tokens, refund the unused ETH.
+        require(token.transferFrom(msg.sender, address(this), numTOK), "RUExchange: token transfer failed");
+        uint refund = msg.value - numETH;
+        if (refund > 0) {
+            (bool ok, ) = msg.sender.call{value: refund}("");
+            require(ok, "RUExchange: refund failed");
+        }
+
+        emit MintBurnDetails(numTOK, numETH);
+        return (numTOK, numETH);
     }
 
     /**
@@ -119,7 +145,28 @@ contract RUExchange is IExchange {
      * @return Returns a tuple consisting of (token_credited, eth_credited). 
      */
     function burnLiquidityTokens(uint amount, uint minTOK, uint minETH) override public payable returns (uint,uint) {
-        // TODO: implement
+        require(balances[msg.sender] >= amount, "RUExchange: burn exceeds balance");
+
+        // Return the caller's pool share. Round down so the pool never loses value:
+        // numTOK = floor(pool_tokens * amount / totalLQT), likewise for ETH.
+        uint numTOK = (token.balanceOf(address(this)) * amount) / _totalSupply;
+        uint numETH = (address(this).balance * amount) / _totalSupply;
+
+        require(numTOK >= minTOK, "RUExchange: fewer tokens than minTOK");
+        require(numETH >= minETH, "RUExchange: less ETH than minETH");
+
+        // Effects: burn the liquidity tokens before sending anything out.
+        _totalSupply -= amount;
+        balances[msg.sender] -= amount;
+        emit Transfer(msg.sender, address(0), amount);
+
+        // Interactions: send the tokens and ETH to the caller.
+        require(token.transfer(msg.sender, numTOK), "RUExchange: token transfer failed");
+        (bool ok, ) = msg.sender.call{value: numETH}("");
+        require(ok, "RUExchange: ETH payout failed");
+
+        emit MintBurnDetails(numTOK, numETH);
+        return (numTOK, numETH);
     }
     
      /**
@@ -207,6 +254,14 @@ contract RUExchange is IExchange {
         balances[recipient] += amount;
         emit Transfer(sender, recipient, amount);
         return true;
+    }
+
+    /**
+     * @dev Integer division rounded up: ceil(a / b). Used so fees and pool deposits
+     * round in the exchange's favor. Assumes b > 0.
+     */
+    function ceilDiv(uint a, uint b) private pure returns (uint) {
+        return (a + b - 1) / b;
     }
 
 }
