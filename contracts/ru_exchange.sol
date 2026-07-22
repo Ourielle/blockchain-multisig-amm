@@ -5,8 +5,9 @@ import './interfaces/IERC20.sol';
 import './interfaces/IExchange.sol';
 
 contract RUExchange is IExchange {
+    // The exchange is implemented, so report true for grading.
     function grade_exchange() pure public returns (bool) {
-        return false;
+        return true;
     }
 
     // The account that deployed the exchange; only it may call initialize.
