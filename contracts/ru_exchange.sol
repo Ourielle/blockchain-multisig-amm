@@ -39,8 +39,35 @@ contract RUExchange is IExchange {
     }
 
 
+    /**
+     * @dev Initialize the exchange and seed the liquidity pool. Callable only once, only by
+     * the deployer. Pulls `initialTOK` tokens (must be approved first) and takes `initialETH`
+     * from the ETH sent, refunding any excess. The deployer receives `initialTOK` liquidity
+     * tokens (the initial LQT supply is defined as the initial token reserve).
+     */
     function initialize(IERC20 _RUXtoken, uint8 _feePercent, uint initialTOK, uint initialETH) override public payable returns(uint) {
-        // TODO: implement
+        require(msg.sender == deployer, "RUExchange: only deployer can initialize");
+        require(!initialized, "RUExchange: already initialized");
+        require(_feePercent < 100, "RUExchange: fee must be below 100");
+        require(msg.value >= initialETH, "RUExchange: insufficient ETH sent");
+
+        // Effects: record configuration and mint the initial liquidity tokens to the deployer.
+        initialized = true;
+        token = _RUXtoken;
+        feePercent = _feePercent;
+        _totalSupply = initialTOK;
+        balances[msg.sender] = initialTOK;
+        emit Transfer(address(0), msg.sender, initialTOK);
+
+        // Interactions: pull the initial tokens into the pool, then refund any excess ETH.
+        require(_RUXtoken.transferFrom(msg.sender, address(this), initialTOK), "RUExchange: token transfer failed");
+        uint refund = msg.value - initialETH;
+        if (refund > 0) {
+            (bool ok, ) = msg.sender.call{value: refund}("");
+            require(ok, "RUExchange: refund failed");
+        }
+
+        return initialTOK;
     }
 
 
