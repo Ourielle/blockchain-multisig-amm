@@ -120,7 +120,31 @@ contract RUExchange is IExchange {
      * @return Returns a tuple with the actual total value in ETH minus the fee, the eth fee and the token fee.
      */
     function sellTokens(uint amount, uint minPrice) override public returns (uint, uint, uint) {
-        // TODO: implement
+        uint poolTOK = token.balanceOf(address(this));
+        uint poolETH = address(this).balance;
+
+        // The token fee is taken from `amount` *before* the trade; only the rest is sold.
+        uint tokenFee = ceilDiv(amount * feePercent, 100);
+        uint tradedTokens = amount - tokenFee;
+
+        // ETH the pool releases for the sold tokens, keeping the product constant:
+        // (poolTOK + tradedTokens) * (poolETH - grossEth) >= poolTOK * poolETH.
+        // Round down so the invariant never drops in the pool's favor.
+        uint grossEth = (poolETH * tradedTokens) / (poolTOK + tradedTokens);
+
+        // The ETH fee is taken from the ETH returned *after* the trade.
+        uint ethFee = ceilDiv(grossEth * feePercent, 100);
+        uint actualPayment = grossEth - ethFee;
+
+        require(actualPayment >= minPrice, "RUExchange: price below minPrice");
+
+        // Interactions: pull all `amount` tokens (trade + fee), then pay the seller.
+        require(token.transferFrom(msg.sender, address(this), amount), "RUExchange: token transfer failed");
+        (bool ok, ) = msg.sender.call{value: actualPayment}("");
+        require(ok, "RUExchange: ETH payout failed");
+
+        emit FeeDetails(actualPayment, ethFee, tokenFee);
+        return (actualPayment, ethFee, tokenFee);
     }
 
     /**
